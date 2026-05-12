@@ -31,107 +31,142 @@ public class MinecraftLauncher {
     }
 
     private static void createAndShowGUI() {
+        Color bgDark     = new Color(30, 30, 30);
+        Color bgPanel    = new Color(45, 45, 45);
+        Color bgField    = new Color(60, 60, 60);
+        Color fgText     = new Color(220, 220, 220);
+        Color fgLabel    = new Color(160, 160, 160);
+        Color btnGreen   = new Color(88, 157, 67);
+        Color btnHover   = new Color(108, 177, 87);
+
         JFrame frame = new JFrame("Ron MC Launcher");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
-        frame.setSize(350, 190); // Pouco a mais só para a barra caber sem amassar
+        frame.setSize(400, 220);
         frame.setLocationRelativeTo(null);
-        frame.setLayout(new BorderLayout(10, 10));
+        frame.getContentPane().setBackground(bgDark);
+        frame.setLayout(new BorderLayout(0, 0));
 
-        JPanel centerPanel = new JPanel(new GridLayout(2, 2, 5, 10));
-        centerPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
+        // Painel central com os campos
+        JPanel centerPanel = new JPanel(new GridLayout(2, 2, 8, 12));
+        centerPanel.setBackground(bgPanel);
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(25, 25, 15, 25));
 
-        centerPanel.add(new JLabel("Usuário:"));
+        JLabel lblUser = new JLabel("Usuário");
+        lblUser.setForeground(fgLabel);
+        lblUser.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
         JTextField txtUsername = new JTextField(12);
-        txtUsername.setBackground(new Color(80, 80, 80)); 
-        txtUsername.setForeground(Color.WHITE);
-        centerPanel.add(txtUsername);
+        txtUsername.setBackground(bgField);
+        txtUsername.setForeground(fgText);
+        txtUsername.setCaretColor(fgText);
+        txtUsername.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(80, 80, 80)),
+            BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        ));
+        txtUsername.setFont(new Font("SansSerif", Font.PLAIN, 13));
 
-        centerPanel.add(new JLabel("Versão:"));
+        JLabel lblVersion = new JLabel("Versão");
+        lblVersion.setForeground(fgLabel);
+        lblVersion.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
         JComboBox<String> comboVersion = new JComboBox<>(new String[]{"Carregando..."});
-        comboVersion.setBackground(new Color(80, 80, 80));
-        comboVersion.setForeground(Color.WHITE);
+        comboVersion.setBackground(bgField);
+        comboVersion.setForeground(fgText);
+        comboVersion.setFont(new Font("SansSerif", Font.PLAIN, 13));
+
+        centerPanel.add(lblUser);
+        centerPanel.add(txtUsername);
+        centerPanel.add(lblVersion);
         centerPanel.add(comboVersion);
 
-        JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
-        bottomPanel.setBorder(BorderFactory.createEmptyBorder(0, 20, 15, 20));
+        // Painel inferior com barra e botão
+        JPanel bottomPanel = new JPanel(new BorderLayout(0, 8));
+        bottomPanel.setBackground(bgDark);
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 25, 20, 25));
 
         JProgressBar progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
         progressBar.setString("Aguardando...");
         progressBar.setVisible(false);
-        
-        JButton btnPlay = new JButton("Jogar");
+        progressBar.setForeground(btnGreen);
+        progressBar.setBackground(bgField);
+        progressBar.setFont(new Font("SansSerif", Font.PLAIN, 11));
+
+        JButton btnPlay = new JButton("JOGAR");
         btnPlay.setFont(new Font("SansSerif", Font.BOLD, 14));
-        
+        btnPlay.setBackground(btnGreen);
+        btnPlay.setForeground(Color.WHITE);
+        btnPlay.setFocusPainted(false);
+        btnPlay.setBorderPainted(false);
+        btnPlay.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnPlay.setPreferredSize(new Dimension(0, 38));
+
+        // Efeito hover no botão
+        btnPlay.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                btnPlay.setBackground(btnHover);
+            }
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                btnPlay.setBackground(btnGreen);
+            }
+        });
+
         bottomPanel.add(progressBar, BorderLayout.NORTH);
         bottomPanel.add(btnPlay, BorderLayout.CENTER);
 
         frame.add(centerPanel, BorderLayout.CENTER);
         frame.add(bottomPanel, BorderLayout.SOUTH);
 
-        // Carrega último perfil
+        // --- O resto do código interno permanece igual ao seu ---
+
         ProfileManager.Profile profile = ProfileManager.loadProfile();
         if (profile != null && profile.username != null) {
             txtUsername.setText(profile.username);
         }
 
-        // Thread para buscar as versões recentes e polular a lista
         new Thread(() -> {
             try {
                 String manifestJson = DownloadManager.downloadString(MANIFEST_URL);
                 JsonObject root = JsonParser.parseString(manifestJson).getAsJsonObject();
                 JsonArray versions = root.getAsJsonArray("versions");
-                
+
                 List<String> displayVersions = new ArrayList<>();
-                int releasesCount = 0;
-                int snapshotCount = 0;
-                
+                int releasesCount = 0, snapshotCount = 0;
+
                 for (JsonElement elem : versions) {
                     JsonObject v = elem.getAsJsonObject();
-                    String id = v.get("id").getAsString();
+                    String id   = v.get("id").getAsString();
                     String type = v.get("type").getAsString();
-                    
-                    if (type.equals("release") && releasesCount < 3) {
-                        displayVersions.add(id);
-                        releasesCount++;
-                    } else if (type.equals("snapshot") && snapshotCount < 1) {
-                        displayVersions.add(id);
-                        snapshotCount++;
-                    }
+                    if (type.equals("release") && releasesCount < 3) { displayVersions.add(id); releasesCount++; }
+                    else if (type.equals("snapshot") && snapshotCount < 1) { displayVersions.add(id); snapshotCount++; }
                     if (releasesCount >= 3 && snapshotCount >= 1) break;
                 }
-                
+
                 SwingUtilities.invokeLater(() -> {
                     comboVersion.removeAllItems();
                     for (String dv : displayVersions) comboVersion.addItem(dv);
-                    
                     if (profile != null && profile.version != null && displayVersions.contains(profile.version)) {
                         comboVersion.setSelectedItem(profile.version);
                     }
                 });
             } catch (Exception e) {
-                SwingUtilities.invokeLater(() -> {
-                    comboVersion.removeAllItems();
-                    comboVersion.addItem("1.20.1"); // fallback fallback
-                });
+                SwingUtilities.invokeLater(() -> { comboVersion.removeAllItems(); comboVersion.addItem("1.20.1"); });
             }
         }).start();
 
         btnPlay.addActionListener(e -> {
             String username = txtUsername.getText().trim();
-            String version = (String) comboVersion.getSelectedItem();
+            String version  = (String) comboVersion.getSelectedItem();
 
             if (username.length() < 3) {
                 JOptionPane.showMessageDialog(frame, "Nome de usuário muito curto!", "Erro", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            // Preparar UI para carregamento
             txtUsername.setEnabled(false);
             comboVersion.setEnabled(false);
             btnPlay.setEnabled(false);
-            
             progressBar.setVisible(true);
             progressBar.setIndeterminate(true);
             progressBar.setString("Baixando pacotes / Preparando...");
@@ -139,7 +174,6 @@ public class MinecraftLauncher {
             new Thread(() -> {
                 try {
                     launchGame(username, version);
-                    
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setIndeterminate(false);
                         progressBar.setValue(100);
@@ -153,7 +187,7 @@ public class MinecraftLauncher {
                         btnPlay.setEnabled(true);
                         txtUsername.setEnabled(true);
                         comboVersion.setEnabled(true);
-                        JOptionPane.showMessageDialog(frame, "Erro ao iniciar o jogo: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(frame, "Erro: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
                     });
                 }
             }).start();
