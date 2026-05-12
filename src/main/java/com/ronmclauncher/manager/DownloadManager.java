@@ -114,7 +114,7 @@ public class DownloadManager {
         System.out.println("OK! JAR salvo em: " + jarPath);
     }
 
-    public static void downloadLibraries(JsonObject versionData, Path librariesDir, Path nativesDir) throws Exception {
+    public static void downloadLibraries(JsonObject versionData, Path librariesDir, Path nativesDir, com.ronmclauncher.MinecraftLauncher.ProgressCallback progress) throws Exception {
         JsonArray libraries = versionData.getAsJsonArray("libraries");
         int total = libraries.size();
         int count = 0;
@@ -122,6 +122,10 @@ public class DownloadManager {
         for (JsonElement libEl : libraries) {
             JsonObject lib = libEl.getAsJsonObject();
             count++;
+
+            // Ocupa de 25% a 60% da barra de progresso (peso 35%)
+            int currentPc = 25 + (int)(((double)count / total) * 35);
+            if (progress != null) progress.update("Baixando libraries...", currentPc);
 
             if (lib.has("rules") && !OSdetection.matchesRules(lib.getAsJsonArray("rules"))){
                 continue;
@@ -213,7 +217,7 @@ public class DownloadManager {
         }
     }
 
-    public static void downloadAssets(JsonObject versionData, String gameDir) throws Exception {
+    public static void downloadAssets(JsonObject versionData, String gameDir, com.ronmclauncher.MinecraftLauncher.ProgressCallback progress) throws Exception {
         JsonObject assetIndexInfo = versionData.getAsJsonObject("assetIndex");
         String assetIndexId  = assetIndexInfo.get("id").getAsString();
         String assetIndexUrl = assetIndexInfo.get("url").getAsString();
@@ -247,8 +251,16 @@ public class DownloadManager {
             Files.createDirectories(dest.getParent());
             downloadFile(url, dest);
             count++;
-            System.out.printf("\r[5/6] Assets: %d/%d", count, total);
+            
+            // Ocupa de 60% a 90% da barra de progresso (peso 30%)
+            int currentPc = 60 + (int)(((double)count / total) * 30);
+            if (progress != null && count % 50 == 0) {
+                progress.update("Baixando Assets (" + count + "/" + total + ")...", currentPc);
+            }
+            
+            System.out.printf("\r[5/7] Assets: %d/%d", count, total);
         }
+        if (progress != null) progress.update("Assets finalizados...", 90);
         System.out.println(" OK!");
     }
 

@@ -181,16 +181,21 @@ public class MinecraftLauncher {
             comboVersion.setEnabled(false);
             btnPlay.setEnabled(false);
             progressBar.setVisible(true);
-            progressBar.setIndeterminate(true);
+            progressBar.setIndeterminate(false);
+            progressBar.setValue(0);
             progressBar.setString("Baixando pacotes / Preparando...");
 
             new Thread(() -> {
                 try {
-                    launchGame(username, version);
+                    launchGame(username, version, (status, percent) -> {
+                        SwingUtilities.invokeLater(() -> {
+                            progressBar.setValue(percent);
+                            progressBar.setString(status + " (" + percent + "%)");
+                        });
+                    });
                     SwingUtilities.invokeLater(() -> {
-                        progressBar.setIndeterminate(false);
                         progressBar.setValue(100);
-                        progressBar.setString("Iniciando o jogo...");
+                        progressBar.setString("Iniciando o jogo... (100%)");
                         try { Thread.sleep(1000); } catch (Exception ignored) {}
                         System.exit(0);
                     });
@@ -209,7 +214,13 @@ public class MinecraftLauncher {
         frame.setVisible(true);
     }
 
-    private static void launchGame(String username, String mcVersion) throws Exception {
+    public interface ProgressCallback {
+        void update(String status, int percentage);
+    }
+
+    private static void launchGame(String username, String mcVersion, ProgressCallback progress) throws Exception {
+        progress.update("Processando versão e manifesto...", 5);
+        System.out.println("[1/7] Processando versão e manifesto...");
         String manifestJson = DownloadManager.downloadString(MANIFEST_URL);
         ProfileManager.saveProfile(username, mcVersion);
         
@@ -219,6 +230,8 @@ public class MinecraftLauncher {
 
         String versionUrl = DownloadManager.findVersionUrl(manifestJson, mcVersion);
         if (versionUrl != null) {
+            progress.update("Baixando JSON nativo...", 10);
+            System.out.println("      -> Baixando JSON nativo...");
             DownloadManager.downloadFile(versionUrl, versionJson);
         } else if (!Files.exists(versionJson)) {
             throw new Exception("Versão não encontrada no servidor da Mojang nem localmente.");
@@ -227,7 +240,8 @@ public class MinecraftLauncher {
         JsonObject versionData = JsonParser.parseString(Files.readString(versionJson)).getAsJsonObject();
         Path jarPath = versionDir.resolve(mcVersion + ".jar");
 
-        // Tratamento de herança (para Fabric, Forge, etc.)
+        progress.update("Tratando heranças (Fabric/Forge)...", 15);
+        System.out.println("[2/7] Tratando heranças (Fabric/Forge)...");
         if (versionData.has("inheritsFrom")) {
             String parentId = versionData.get("inheritsFrom").getAsString();
             Path parentJson = Path.of(GAME_DIR, "versions", parentId, parentId + ".json");
@@ -257,20 +271,30 @@ public class MinecraftLauncher {
             }
         }
 
+        progress.update("Baixando client principal...", 20);
+        System.out.println("[3/7] Verificando arquivo client principal...");
         if (versionData.has("downloads") && versionData.getAsJsonObject("downloads").has("client")) {
             DownloadManager.downloadClientJar(versionData, jarPath.getParent(), jarPath.getFileName().toString().replace(".jar", ""));
         }
 
+        progress.update("Baixando bibliotecas...", 25);
+        System.out.println("[4/7] Analisando e baixando Libraries...");
         Path librariesDir = Path.of(GAME_DIR, "libraries");
         Path nativesDir   = versionDir.resolve("natives");
         Files.createDirectories(librariesDir);
         Files.createDirectories(nativesDir);
-        DownloadManager.downloadLibraries(versionData, librariesDir, nativesDir);
+        DownloadManager.downloadLibraries(versionData, librariesDir, nativesDir, progress);
 
-        DownloadManager.downloadAssets(versionData, GAME_DIR);
+        progress.update("Sincronizando Assets (Sons, Texturas)...", 60);
+        System.out.println("\n[5/7] Sincronizando Assets (Som, Texturas, etc)...");
+        DownloadManager.downloadAssets(versionData, GAME_DIR, progress);
 
+        progress.update("Checando Runtime do Java...", 90);
+        System.out.println("[6/7] Checando/Instalando Runtime do Java...");
         String javaBin = com.ronmclauncher.manager.JavaManager.getJavaPath(versionData, GAME_DIR);
 
+        progress.update("Ligando a JVM...", 98);
+        System.out.println("[7/7] Preparando Classpath e Ligando a JVM...");
         GameRunner.launch(versionData, librariesDir, jarPath, nativesDir, mcVersion, username, GAME_DIR, javaBin);
     }
 }
