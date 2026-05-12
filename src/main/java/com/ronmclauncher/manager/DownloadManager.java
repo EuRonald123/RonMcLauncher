@@ -15,6 +15,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DownloadManager {
 
@@ -222,5 +224,20 @@ public class DownloadManager {
             System.out.printf("\r[5/6] Assets: %d/%d", count, total);
         }
         System.out.println(" OK!");
+    }
+
+    public static List<String> getLocalVersions(String gameDir) {
+        List<String> local = new ArrayList<>();
+        Path versionsDir = Path.of(gameDir, "versions");
+        if (!Files.exists(versionsDir)) return local;
+    
+        try (var stream = Files.list(versionsDir)) {
+            stream.filter(Files::isDirectory)
+                  .map(p -> p.getFileName().toString())
+                  .forEach(local::add);
+        } catch (Exception e) {
+            // ignora
+        }
+        return local;
     }
 }

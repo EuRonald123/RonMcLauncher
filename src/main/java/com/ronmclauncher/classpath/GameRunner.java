@@ -37,11 +37,11 @@ public class GameRunner {
         cmd.add("--username");    cmd.add(username);
         cmd.add("--version");     cmd.add(mcVersion);
         cmd.add("--gameDir");     cmd.add(gameDir);
-        cmd.add(Path.of(gameDir, "assets").toString());
+        cmd.add("--assetsDir");   cmd.add(Path.of(gameDir, "assets").toString());
         cmd.add("--assetIndex");  cmd.add(assetIndex);
-        cmd.add("--uuid");        cmd.add(uuid);
+        cmd.add("--uuid");        cmd.add(uuid.replace("-", ""));
         cmd.add("--accessToken"); cmd.add("0");
-        cmd.add("--userType");    cmd.add("legacy");
+        cmd.add("--userType");    cmd.add("mojang");
         cmd.add("--versionType"); cmd.add("release");
 
         System.out.println("[6/6] Iniciando Minecraft " + mcVersion + " e fechando o launcher...\n");

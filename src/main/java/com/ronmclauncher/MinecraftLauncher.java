@@ -134,6 +134,7 @@ public class MinecraftLauncher {
                 List<String> displayVersions = new ArrayList<>();
                 int releasesCount = 0, snapshotCount = 0;
 
+                // Versões remotas da Mojang
                 for (JsonElement elem : versions) {
                     JsonObject v = elem.getAsJsonObject();
                     String id   = v.get("id").getAsString();
@@ -141,6 +142,14 @@ public class MinecraftLauncher {
                     if (type.equals("release") && releasesCount < 3) { displayVersions.add(id); releasesCount++; }
                     else if (type.equals("snapshot") && snapshotCount < 1) { displayVersions.add(id); snapshotCount++; }
                     if (releasesCount >= 3 && snapshotCount >= 1) break;
+                }
+
+                // Versões locais já instaladas fabric, forge, etc
+                List<String> localVersions = DownloadManager.getLocalVersions(GAME_DIR);
+                for (String local : localVersions) {
+                    if (!displayVersions.contains(local)) {
+                        displayVersions.add(local);
+                    }
                 }
 
                 SwingUtilities.invokeLater(() -> {
@@ -159,8 +168,12 @@ public class MinecraftLauncher {
             String username = txtUsername.getText().trim();
             String version  = (String) comboVersion.getSelectedItem();
 
-            if (username.length() < 3) {
-                JOptionPane.showMessageDialog(frame, "Nome de usuário muito curto!", "Erro", JOptionPane.ERROR_MESSAGE);
+            if (username.length() < 3 || username.length() > 16) {
+                JOptionPane.showMessageDialog(frame, "O nome de usuário deve ter entre 3 e 16 caracteres!", "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            if (!username.matches("^[a-zA-Z0-9_]+$")) {
+                JOptionPane.showMessageDialog(frame, "O nome de usuário não pode conter espaços ou caracteres especiais (use letras, números e underscore).", "Erro", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -199,17 +212,54 @@ public class MinecraftLauncher {
     private static void launchGame(String username, String mcVersion) throws Exception {
         String manifestJson = DownloadManager.downloadString(MANIFEST_URL);
         ProfileManager.saveProfile(username, mcVersion);
-        String versionUrl = DownloadManager.findVersionUrl(manifestJson, mcVersion);
-
-        if (versionUrl == null) throw new Exception("Versão não encontrada no servidor da Mojang.");
-
+        
         Path versionDir  = Path.of(GAME_DIR, "versions", mcVersion);
         Path versionJson = versionDir.resolve(mcVersion + ".json");
         Files.createDirectories(versionDir);
-        DownloadManager.downloadFile(versionUrl, versionJson);
-        JsonObject versionData = JsonParser.parseString(Files.readString(versionJson)).getAsJsonObject();
 
-        DownloadManager.downloadClientJar(versionData, versionDir, mcVersion);
+        String versionUrl = DownloadManager.findVersionUrl(manifestJson, mcVersion);
+        if (versionUrl != null) {
+            DownloadManager.downloadFile(versionUrl, versionJson);
+        } else if (!Files.exists(versionJson)) {
+            throw new Exception("Versão não encontrada no servidor da Mojang nem localmente.");
+        }
+
+        JsonObject versionData = JsonParser.parseString(Files.readString(versionJson)).getAsJsonObject();
+        Path jarPath = versionDir.resolve(mcVersion + ".jar");
+
+        // Tratamento de herança (para Fabric, Forge, etc.)
+        if (versionData.has("inheritsFrom")) {
+            String parentId = versionData.get("inheritsFrom").getAsString();
+            Path parentJson = Path.of(GAME_DIR, "versions", parentId, parentId + ".json");
+            
+            if (Files.exists(parentJson)) {
+                JsonObject parentData = JsonParser.parseString(Files.readString(parentJson)).getAsJsonObject();
+                jarPath = Path.of(GAME_DIR, "versions", parentId, parentId + ".jar");
+                
+                // Mesclar libraries
+                if (parentData.has("libraries")) {
+                    JsonArray parentLibs = parentData.getAsJsonArray("libraries");
+                    JsonArray childLibs = versionData.has("libraries") ? versionData.getAsJsonArray("libraries") : new JsonArray();
+                    for (JsonElement el : parentLibs) childLibs.add(el);
+                    versionData.add("libraries", childLibs);
+                }
+                
+                // Pegar infos vitais do pai caso não tenha no filho
+                if (!versionData.has("assetIndex") && parentData.has("assetIndex")) {
+                    versionData.add("assetIndex", parentData.get("assetIndex"));
+                }
+                if (!versionData.has("javaVersion") && parentData.has("javaVersion")) {
+                    versionData.add("javaVersion", parentData.get("javaVersion"));
+                }
+                if (!versionData.has("downloads") && parentData.has("downloads")) {
+                    versionData.add("downloads", parentData.get("downloads"));
+                }
+            }
+        }
+
+        if (versionData.has("downloads") && versionData.getAsJsonObject("downloads").has("client")) {
+            DownloadManager.downloadClientJar(versionData, jarPath.getParent(), jarPath.getFileName().toString().replace(".jar", ""));
+        }
 
         Path librariesDir = Path.of(GAME_DIR, "libraries");
         Path nativesDir   = versionDir.resolve("natives");
@@ -221,6 +271,6 @@ public class MinecraftLauncher {
 
         String javaBin = com.ronmclauncher.manager.JavaManager.getJavaPath(versionData, GAME_DIR);
 
-        GameRunner.launch(versionData, librariesDir, versionDir.resolve(mcVersion + ".jar"), nativesDir, mcVersion, username, GAME_DIR, javaBin);
+        GameRunner.launch(versionData, librariesDir, jarPath, nativesDir, mcVersion, username, GAME_DIR, javaBin);
     }
 }
