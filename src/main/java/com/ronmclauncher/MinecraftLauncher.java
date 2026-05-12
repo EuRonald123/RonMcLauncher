@@ -5,118 +5,184 @@ import com.ronmclauncher.classpath.GameRunner;
 import com.ronmclauncher.manager.DownloadManager;
 import com.ronmclauncher.manager.ProfileManager;
 
+import javax.swing.*;
+import java.awt.*;
+import java.io.PrintStream;
+import java.io.OutputStream;
 import java.nio.file.*;
-import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MinecraftLauncher {
 
-    // ============================================================
-    // CONFIGURAÇÕES
-    // ============================================================
-    static final String GAME_DIR   = com.ronmclauncher.os.OSdetection.getDefaultGameDir();
+    static final String GAME_DIR = com.ronmclauncher.os.OSdetection.getDefaultGameDir();
+    static final String MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
+    
+    // Silencia qualquer System.out para não gastar processamento à toa
+    static {
+        System.setOut(new PrintStream(new OutputStream() {
+            public void write(int b) {}
+        }));
+    }
 
-    static final String MANIFEST_URL =
-        "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
+    public static void main(String[] args) {
+        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception e) {}
+        SwingUtilities.invokeLater(MinecraftLauncher::createAndShowGUI);
+    }
 
-    static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static void createAndShowGUI() {
+        JFrame frame = new JFrame("Ron MC Launcher");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setResizable(false);
+        frame.setSize(350, 180);
+        frame.setLocationRelativeTo(null);
+        frame.setLayout(new BorderLayout(10, 10));
 
-    public static void main(String[] args) throws Exception {
-        System.out.println("=== Ron MC Launcher ===");
-        Scanner scanner = new Scanner(System.in);
+        JPanel centerPanel = new JPanel(new GridLayout(2, 2, 5, 10));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
 
-        String mcVersion = null;
-        String username = null;
+        centerPanel.add(new JLabel("Usuário:"));
+        JTextField txtUsername = new JTextField(12);
+        centerPanel.add(txtUsername);
 
+        centerPanel.add(new JLabel("Versão:"));
+        JComboBox<String> comboVersion = new JComboBox<>(new String[]{"Carregando..."});
+        centerPanel.add(comboVersion);
+
+        JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(0, 20, 15, 20));
+
+        JProgressBar progressBar = new JProgressBar();
+        progressBar.setStringPainted(true);
+        progressBar.setString("Aguardando...");
+        progressBar.setVisible(false);
+        
+        JButton btnPlay = new JButton("Jogar");
+        btnPlay.setFont(new Font("SansSerif", Font.BOLD, 14));
+        
+        bottomPanel.add(progressBar, BorderLayout.NORTH);
+        bottomPanel.add(btnPlay, BorderLayout.CENTER);
+
+        frame.add(centerPanel, BorderLayout.CENTER);
+        frame.add(bottomPanel, BorderLayout.SOUTH);
+
+        // Carrega último perfil
         ProfileManager.Profile profile = ProfileManager.loadProfile();
-        boolean createNew = true;
-
-        if (profile != null && profile.username != null && profile.version != null) {
-            System.out.println("Perfil encontrado!");
-            System.out.println("Usuário: " + profile.username + " | Versão: " + profile.version);
-            System.out.print("Deseja usar este perfil? [1] Sim  [2] Criar/Alterar (Novo): ");
-            String op = scanner.nextLine();
-            if (op.trim().equals("1")) {
-                mcVersion = profile.version;
-                username = profile.username;
-                createNew = false;
-            }
+        if (profile != null && profile.username != null) {
+            txtUsername.setText(profile.username);
         }
 
-        System.out.println("\n[1/6] Buscando informações dos servidores da Mojang...");
+        // Thread para buscar as versões recentes e polular a lista
+        new Thread(() -> {
+            try {
+                String manifestJson = DownloadManager.downloadString(MANIFEST_URL);
+                JsonObject root = JsonParser.parseString(manifestJson).getAsJsonObject();
+                JsonArray versions = root.getAsJsonArray("versions");
+                
+                List<String> displayVersions = new ArrayList<>();
+                int releasesCount = 0;
+                int snapshotCount = 0;
+                
+                for (JsonElement elem : versions) {
+                    JsonObject v = elem.getAsJsonObject();
+                    String id = v.get("id").getAsString();
+                    String type = v.get("type").getAsString();
+                    
+                    if (type.equals("release") && releasesCount < 3) {
+                        displayVersions.add(id);
+                        releasesCount++;
+                    } else if (type.equals("snapshot") && snapshotCount < 1) {
+                        displayVersions.add(id);
+                        snapshotCount++;
+                    }
+                    if (releasesCount >= 3 && snapshotCount >= 1) break;
+                }
+                
+                SwingUtilities.invokeLater(() -> {
+                    comboVersion.removeAllItems();
+                    for (String dv : displayVersions) comboVersion.addItem(dv);
+                    
+                    if (profile != null && profile.version != null && displayVersions.contains(profile.version)) {
+                        comboVersion.setSelectedItem(profile.version);
+                    }
+                });
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    comboVersion.removeAllItems();
+                    comboVersion.addItem("1.20.1"); // fallback fallback
+                });
+            }
+        }).start();
+
+        btnPlay.addActionListener(e -> {
+            String username = txtUsername.getText().trim();
+            String version = (String) comboVersion.getSelectedItem();
+
+            if (username.length() < 3) {
+                JOptionPane.showMessageDialog(frame, "Nome de usuário muito curto!", "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // Preparar UI para carregamento
+            txtUsername.setEnabled(false);
+            comboVersion.setEnabled(false);
+            btnPlay.setEnabled(false);
+            
+            progressBar.setVisible(true);
+            progressBar.setIndeterminate(true);
+            progressBar.setString("Baixando pacotes / Preparando...");
+
+            new Thread(() -> {
+                try {
+                    launchGame(username, version);
+                    
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setIndeterminate(false);
+                        progressBar.setValue(100);
+                        progressBar.setString("Iniciando o jogo...");
+                        try { Thread.sleep(1000); } catch (Exception ignored) {}
+                        System.exit(0);
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setVisible(false);
+                        btnPlay.setEnabled(true);
+                        txtUsername.setEnabled(true);
+                        comboVersion.setEnabled(true);
+                        JOptionPane.showMessageDialog(frame, "Erro ao iniciar o jogo: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }).start();
+        });
+
+        frame.setVisible(true);
+    }
+
+    private static void launchGame(String username, String mcVersion) throws Exception {
         String manifestJson = DownloadManager.downloadString(MANIFEST_URL);
-
-        if (createNew) {
-            DownloadManager.printLatestVersions(manifestJson, 15);
-            while (true) {
-                System.out.print("\nDigite a versão desejada (ex: 1.20.1): ");
-                mcVersion = scanner.nextLine().trim();
-                if (DownloadManager.isValidVersion(manifestJson, mcVersion)) {
-                    break;
-                } else {
-                    System.out.println("[ERRO] Versão não encontrada! Preste atenção na lista seu porra");
-                }
-            }
-
-            while (true) {
-                System.out.print("Digite o seu nome de usuário: ");
-                username = scanner.nextLine().trim();
-                if (!username.isEmpty() && username.length() >= 3) {
-                    break;
-                } else {
-                    System.out.println("[ERRO] Nome inválido. TFD");
-                }
-            }
-
-            // Salva para a próxima vez
-            ProfileManager.saveProfile(username, mcVersion);
-            System.out.println("Perfil salvo com sucesso!\n");
-        }
-
-        System.out.println("Iniciando com:");
-        System.out.println("Versão  : " + mcVersion);
-        System.out.println("Usuário : " + username);
-        System.out.println("Dir     : " + GAME_DIR);
-        System.out.println();
-
-        // 2. Acha a URL do JSON da versão escolhida
+        ProfileManager.saveProfile(username, mcVersion);
         String versionUrl = DownloadManager.findVersionUrl(manifestJson, mcVersion);
-        if (versionUrl == null) {
-            System.err.println("[ERRO] Versão " + mcVersion + " não encontrada!");
-            return;
-        }
 
-        // 3. Baixa o JSON da versão
-        System.out.println("[2/6] Baixando metadata da versão " + mcVersion + "...");
+        if (versionUrl == null) throw new Exception("Versão não encontrada no servidor da Mojang.");
+
         Path versionDir  = Path.of(GAME_DIR, "versions", mcVersion);
         Path versionJson = versionDir.resolve(mcVersion + ".json");
         Files.createDirectories(versionDir);
         DownloadManager.downloadFile(versionUrl, versionJson);
-
-        System.out.println("OK! JSON da versão salvo em: " + versionJson);
-
-        // 4. Lê o JSON da versão e baixa o JAR
-        JsonObject versionData = JsonParser.parseString(
-            Files.readString(versionJson)
-        ).getAsJsonObject();
+        JsonObject versionData = JsonParser.parseString(Files.readString(versionJson)).getAsJsonObject();
 
         DownloadManager.downloadClientJar(versionData, versionDir, mcVersion);
 
-        // 5. Baixa libraries e extrai natives
         Path librariesDir = Path.of(GAME_DIR, "libraries");
         Path nativesDir   = versionDir.resolve("natives");
         Files.createDirectories(librariesDir);
         Files.createDirectories(nativesDir);
         DownloadManager.downloadLibraries(versionData, librariesDir, nativesDir);
 
-        // 6. Baixa assets
         DownloadManager.downloadAssets(versionData, GAME_DIR);
 
-        // 7. Configura o Java nativo (isolado) da versão
         String javaBin = com.ronmclauncher.manager.JavaManager.getJavaPath(versionData, GAME_DIR);
 
-        // 8. Executa!
         GameRunner.launch(versionData, librariesDir, versionDir.resolve(mcVersion + ".jar"), nativesDir, mcVersion, username, GAME_DIR, javaBin);
-        
-        scanner.close();
     }
 }
