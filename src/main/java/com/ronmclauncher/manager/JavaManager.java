@@ -89,7 +89,10 @@ public class JavaManager {
         try {
             HttpURLConnection conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();
             conn.setRequestMethod("HEAD");
-            return conn.getResponseCode() == 200 || conn.getResponseCode() == 302;
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            int code = conn.getResponseCode();
+            return code == 200 || code == 301 || code == 302 || code == 303 || code == 307 || code == 308;
         } catch (Exception e) {
             return false;
         }

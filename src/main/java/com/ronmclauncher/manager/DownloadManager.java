@@ -24,6 +24,8 @@ public class DownloadManager {
     public static String downloadString(String url) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
         conn.setRequestProperty("User-Agent", "ron-mclauncher/1.0");
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(30000);
         try (InputStream is = conn.getInputStream()) {
             return new String(is.readAllBytes());
         }
@@ -47,7 +49,7 @@ public class DownloadManager {
             conn.setReadTimeout(30_000);
             
             int status = conn.getResponseCode();
-            if (status == 301 || status == 302 || status == 303) {
+            if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
                 currentUrl = conn.getHeaderField("Location");
                 redirects++;
             } else {
@@ -57,7 +59,7 @@ public class DownloadManager {
 
         if (conn == null || conn.getResponseCode() != 200) {
             System.err.println("[AVISO] HTTP " + (conn != null ? conn.getResponseCode() : "null") + " → " + url);
-            return;
+            throw new Exception("Falha no download: HTTP " + (conn != null ? conn.getResponseCode() : "null"));
         }
         try (InputStream is = conn.getInputStream()) {
             Files.copy(is, dest, StandardCopyOption.REPLACE_EXISTING);
