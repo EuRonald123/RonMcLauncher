@@ -126,33 +126,57 @@ public class DownloadManager {
             if (lib.has("rules") && !OSdetection.matchesRules(lib.getAsJsonArray("rules"))){
                 continue;
             }
-            if (!lib.has("downloads")) {
-                continue;
-            }
 
-            JsonObject downloads = lib.getAsJsonObject("downloads");
+            if (lib.has("downloads")) {
+                JsonObject downloads = lib.getAsJsonObject("downloads");
 
-            // Library comum
-            if (downloads.has("artifact")) {
-                JsonObject artifact = downloads.getAsJsonObject("artifact");
-                String path = artifact.get("path").getAsString();
-                String url  = artifact.get("url").getAsString();
-                Path   dest = librariesDir.resolve(path);
-                downloadFile(url, dest);
-            }
+                // Library comum
+                if (downloads.has("artifact")) {
+                    JsonObject artifact = downloads.getAsJsonObject("artifact");
+                    String path = artifact.get("path").getAsString();
+                    String url  = artifact.get("url").getAsString();
+                    Path   dest = librariesDir.resolve(path);
+                    downloadFile(url, dest);
+                }
 
-            // Natives (arquivos nativos do SO: .so, .dll, .dylib)
-            if (downloads.has("classifiers")) {
-                String nativeKey = getNativeKey(lib);
-                if (nativeKey != null) {
-                    JsonObject classifiers = downloads.getAsJsonObject("classifiers");
-                    if (classifiers.has(nativeKey)) {
-                        JsonObject nat  = classifiers.getAsJsonObject(nativeKey);
-                        String     path = nat.get("path").getAsString();
-                        String     url  = nat.get("url").getAsString();
-                        Path       dest = librariesDir.resolve(path);
-                        downloadFile(url, dest);
-                        extractNatives(dest, nativesDir);
+                // Natives (arquivos nativos do SO: .so, .dll, .dylib)
+                if (downloads.has("classifiers")) {
+                    String nativeKey = getNativeKey(lib);
+                    if (nativeKey != null) {
+                        JsonObject classifiers = downloads.getAsJsonObject("classifiers");
+                        if (classifiers.has(nativeKey)) {
+                            JsonObject nat  = classifiers.getAsJsonObject(nativeKey);
+                            String     path = nat.get("path").getAsString();
+                            String     url  = nat.get("url").getAsString();
+                            Path       dest = librariesDir.resolve(path);
+                            downloadFile(url, dest);
+                            extractNatives(dest, nativesDir);
+                        }
+                    }
+                }
+            } else if (lib.has("name")) {
+                // Suporte para libs do Fabric, Forge, etc que usam Maven format puro
+                String[] parts = lib.get("name").getAsString().split(":");
+                if (parts.length >= 3) {
+                    String pkg = parts[0].replace('.', '/');
+                    String art = parts[1];
+                    String ver = parts[2];
+                    String ext = "jar";
+                    if (ver.contains("@")) {
+                        String[] vparts = ver.split("@");
+                        ver = vparts[0];
+                        ext = vparts[1];
+                    }
+                    String path = pkg + "/" + art + "/" + ver + "/" + art + "-" + ver + "." + ext;
+                    Path dest = librariesDir.resolve(path);
+                    
+                    if (lib.has("url")) {
+                        String baseUrl = lib.get("url").getAsString();
+                        if (!baseUrl.endsWith("/")) baseUrl += "/";
+                        downloadFile(baseUrl + path, dest);
+                    } else {
+                        // Se não tiver url declarada, tenta do Maven Central ou do repositório da Mojang
+                        downloadFile("https://libraries.minecraft.net/" + path, dest);
                     }
                 }
             }
