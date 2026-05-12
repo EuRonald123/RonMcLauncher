@@ -34,7 +34,7 @@ public class MinecraftLauncher {
         JFrame frame = new JFrame("Ron MC Launcher");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
-        frame.setSize(350, 180);
+        frame.setSize(350, 190); // Pouco a mais só para a barra caber sem amassar
         frame.setLocationRelativeTo(null);
         frame.setLayout(new BorderLayout(10, 10));
 
@@ -43,10 +43,14 @@ public class MinecraftLauncher {
 
         centerPanel.add(new JLabel("Usuário:"));
         JTextField txtUsername = new JTextField(12);
+        txtUsername.setBackground(new Color(80, 80, 80)); 
+        txtUsername.setForeground(Color.WHITE);
         centerPanel.add(txtUsername);
 
         centerPanel.add(new JLabel("Versão:"));
         JComboBox<String> comboVersion = new JComboBox<>(new String[]{"Carregando..."});
+        comboVersion.setBackground(new Color(80, 80, 80));
+        comboVersion.setForeground(Color.WHITE);
         centerPanel.add(comboVersion);
 
         JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
