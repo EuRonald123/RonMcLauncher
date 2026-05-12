@@ -4,13 +4,14 @@ Um launcher (iniciador) pessoal de Minecraft Java, feito para rodar desde as ver
 
 Projeto para fins educacionais
 
-## Funcionalidadesuncionalidade
+## Funcionalidades
 
 - **Gerenciamento de Perfis**: Salva e carrega suas informações e jogadores, assim você não precisa digitar tudo de novo sempre que for jogar.
 - **Java Automático**: O jogo precisa de versões diferentes do Java dependendo da versão do Minecraft (ex: as mais novas precisam do Java 21). O launcher baixa a versão certa sozinho, isolando tudo para não bagunçar o seu PC.
 - **Download Inteligente**: Ele baixa todos os arquivos importantes, blocos, sons e bibliotecas que o jogo precisa diretamente da Mojang.
 - **Identificação do Sistema**: Consegue saber sozinho se você está no Windows, Linux ou Mac para configurar as coisas certas.
 - **Organização e Execução**: Ele agrupa todos os arquivos necessários (o famoso "Classpath") e inicia o jogo em segundo plano.
+- **Pastas Personalizadas (Múltiplas Instâncias)**: Escolha onde quer instalar os arquivos do jogo! Isso permite que você tenha instâncias separadas — por exemplo, uma pasta só para o Minecraft limpo (Vanilla) e outra pasta para rodar mods como Fabric ou Forge, sem que os mods e mundos se misturem.
 
 ## Pré-requisitos
 
@@ -35,6 +36,7 @@ Para trabalhar no código ou compilar você vai precisar de:
    java -jar target/ron-mclauncher-1.0-SNAPSHOT.jar
    ```
 
+##Arquitetura
 
 - `MinecraftLauncher.java` - É por aqui que o programa começa a rodar.
 - **Gerenciadores (`manager/`)**:
