@@ -37,7 +37,7 @@ public class GameRunner {
         cmd.add("--username");    cmd.add(username);
         cmd.add("--version");     cmd.add(mcVersion);
         cmd.add("--gameDir");     cmd.add(gameDir);
-        cmd.add("--assetsDir");   cmd.add(gameDir + "/assets");
+        cmd.add(Path.of(gameDir, "assets").toString());
         cmd.add("--assetIndex");  cmd.add(assetIndex);
         cmd.add("--uuid");        cmd.add(uuid);
         cmd.add("--accessToken"); cmd.add("0");
