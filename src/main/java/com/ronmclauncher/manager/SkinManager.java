@@ -10,12 +10,12 @@ import java.nio.file.*;
  * Gerencia skins do usuário no RonMcLauncher.
  *
  * Funciona para qualquer um nessa bagaça
- * anonimo so envia o png e recebe url
+ * anonimo so envia o png e recebe url usando freeimage.host API.
  */
 public class SkinManager {
 
-    // API do envs.sh — upload anônimo, direto e sem bloqueios do Cloudflare
-    private static final String UPLOAD_API = "https://envs.sh";
+    // API do freeimage.host — Sem cloudflare para hotlink de imagens PNG
+    private static final String UPLOAD_API = "https://freeimage.host/api/1/upload";
 
     // Pasta local onde as skins ficam armazenadas
     private static final Path SKIN_DIR = Path.of(OSdetection.getDefaultGameDir(), "ron_launcher_skins");
@@ -24,13 +24,6 @@ public class SkinManager {
     // SALVAR SKIN LOCALMENTE
     // -------------------------------------------------------------------------
 
-    /**
-     * Valida e salva o arquivo de skin (.png) localmente para o usuário.
-     *
-     * @param username  Nome do jogador
-     * @param skinBytes Bytes do arquivo PNG (deve ser 64x64 pixels)
-     * @param model     "classic" (Steve) ou "slim" (Alex)
-     */
     public static void saveSkinLocally(String username, byte[] skinBytes, String model) throws Exception {
         if (!isPng(skinBytes)) {
             throw new IllegalArgumentException("O arquivo selecionado não é um PNG válido.");
@@ -52,18 +45,9 @@ public class SkinManager {
     }
 
     // -------------------------------------------------------------------------
-    // UPLOAD PARA CATBOX.MOE
+    // UPLOAD PARA FREEIMAGE.HOST
     // -------------------------------------------------------------------------
 
-    /**
-     * Envia a skin do usuário para o catbox.moe de forma anônima e retorna a URL.
-     * A URL retornada pode ser usada diretamente no SkinsRestorer via /skin url <url>.
-     *
-     * TOtalmente anonimo
-     *
-     * @param username Nome do jogador
-     * @return URL pública permanente da skin (ex: https://files.catbox.moe/abc123.png)
-     */
     public static String uploadSkin(String username) throws Exception {
         Path skinFile = SKIN_DIR.resolve(username + ".png");
         if (!Files.exists(skinFile)) {
@@ -73,20 +57,18 @@ public class SkinManager {
         }
 
         byte[] skinBytes = Files.readAllBytes(skinFile);
-        System.err.println("[SKIN] Enviando skin para catbox.moe...");
+        System.err.println("[SKIN] Enviando skin para hospedagem livre...");
 
-        // Monta o corpo multipart/form-data sem dependências externas
         String boundary = "----RonMCBoundary" + System.currentTimeMillis();
         byte[] body = buildMultipartBody(boundary, skinBytes, username + ".png");
 
-        // Faz a requisição POST
         HttpURLConnection conn = (HttpURLConnection) URI.create(UPLOAD_API).toURL().openConnection();
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
         conn.setConnectTimeout(20_000);
         conn.setReadTimeout(30_000);
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-        conn.setRequestProperty("User-Agent", "ron-mclauncher/1.0");
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
         try (OutputStream out = conn.getOutputStream()) {
             out.write(body);
@@ -97,14 +79,17 @@ public class SkinManager {
                 ? conn.getInputStream()
                 : conn.getErrorStream();
 
-        // retorna url ou mensagem de erro
-        String skinUrl = new String(responseStream.readAllBytes()).trim();
+        String jsonResponse = new String(responseStream.readAllBytes()).trim();
 
-        if (status != 200 || !skinUrl.startsWith("https://")) {
-            throw new Exception("Falha no upload para catbox.moe. HTTP " + status + " → " + skinUrl);
+        if (status != 200 || !jsonResponse.contains("\"url\"")) {
+            throw new Exception("Falha no upload. HTTP " + status + " -> " + jsonResponse);
         }
 
-        // Salva a URL localmente para não precisar re-enviar toda vez
+        // Extrai a URL do JSON usando open-source Gson incluso no launcher
+        String skinUrl = com.google.gson.JsonParser.parseString(jsonResponse)
+                .getAsJsonObject().getAsJsonObject("image").get("url").getAsString();
+
+        // Salva a URL localmente para não precisar re-enviar
         Files.writeString(SKIN_DIR.resolve(username + "_url.txt"), skinUrl);
 
         System.err.println("[SKIN] Upload concluído! URL: " + skinUrl);
@@ -115,10 +100,6 @@ public class SkinManager {
     // CONSULTAS
     // -------------------------------------------------------------------------
 
-    /**
-     * Retorna a URL da skin já enviada anteriormente.
-     * Retorna null se o usuário ainda não fez upload.
-     */
     public static String getSkinUrl(String username) {
         Path urlFile = SKIN_DIR.resolve(username + "_url.txt");
         if (!Files.exists(urlFile)) return null;
@@ -129,16 +110,10 @@ public class SkinManager {
         }
     }
 
-    /**
-     * Retorna true se o usuário já tem uma skin salva localmente.
-     */
     public static boolean hasSkinLocally(String username) {
         return Files.exists(SKIN_DIR.resolve(username + ".png"));
     }
 
-    /**
-     * Retorna o modelo salvo ("classic" ou "slim"). Padrão: "classic".
-     */
     public static String getModel(String username) {
         Path modelFile = SKIN_DIR.resolve(username + "_model.txt");
         if (!Files.exists(modelFile)) return "classic";
@@ -149,9 +124,6 @@ public class SkinManager {
         }
     }
 
-    /**
-     * Retorna o caminho local do PNG da skin, ou null se não existir.
-     */
     public static Path getSkinPath(String username) {
         Path p = SKIN_DIR.resolve(username + ".png");
         return Files.exists(p) ? p : null;
@@ -161,41 +133,52 @@ public class SkinManager {
     // HELPERS PRIVADOS
     // -------------------------------------------------------------------------
 
-    /**
-     * Monta o corpo multipart/form-data para a API de imagens.
-     *
-     * Campos enviados:
-     *   file -> o PNG da skin
-     */
     private static byte[] buildMultipartBody(String boundary, byte[] fileBytes, String fileName) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         String crlf = "\r\n";
         String dd   = "--";
 
-        // Campo: file (o PNG)
+        // Campo: key (API FreeImageHost Pública)
         out.write((dd + boundary + crlf).getBytes());
-        out.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"" + crlf).getBytes());
+        out.write(("Content-Disposition: form-data; name=\"key\"" + crlf).getBytes());
+        out.write(crlf.getBytes());
+        out.write("6d207e02198a847aa98d0a2a901485a5".getBytes());
+        out.write(crlf.getBytes());
+
+        // Campo: action
+        out.write((dd + boundary + crlf).getBytes());
+        out.write(("Content-Disposition: form-data; name=\"action\"" + crlf).getBytes());
+        out.write(crlf.getBytes());
+        out.write("upload".getBytes());
+        out.write(crlf.getBytes());
+
+        // Campo: format
+        out.write((dd + boundary + crlf).getBytes());
+        out.write(("Content-Disposition: form-data; name=\"format\"" + crlf).getBytes());
+        out.write(crlf.getBytes());
+        out.write("json".getBytes());
+        out.write(crlf.getBytes());
+
+        // Campo: source (o arquivo)
+        out.write((dd + boundary + crlf).getBytes());
+        out.write(("Content-Disposition: form-data; name=\"source\"; filename=\"" + fileName + "\"" + crlf).getBytes());
         out.write(("Content-Type: image/png" + crlf).getBytes());
         out.write(crlf.getBytes());
         out.write(fileBytes);
         out.write(crlf.getBytes());
 
-        // Fechamento do multipart
+        // Fechamento
         out.write((dd + boundary + dd + crlf).getBytes());
 
         return out.toByteArray();
     }
 
-    /**
-     * Verifica os magic bytes do PNG para garantir que o arquivo é válido
-     * antes de salvar ou enviar.
-     */
     private static boolean isPng(byte[] data) {
         if (data == null || data.length < 8) return false;
         return (data[0] & 0xFF) == 0x89
-            && (data[1] & 0xFF) == 0x50  // P
-            && (data[2] & 0xFF) == 0x4E  // N
-            && (data[3] & 0xFF) == 0x47  // G
+            && (data[1] & 0xFF) == 0x50  
+            && (data[2] & 0xFF) == 0x4E  
+            && (data[3] & 0xFF) == 0x47  
             && (data[4] & 0xFF) == 0x0D
             && (data[5] & 0xFF) == 0x0A
             && (data[6] & 0xFF) == 0x1A
