@@ -244,15 +244,21 @@ public class MinecraftLauncher {
                         // 1. Salva localmente
                         SkinManager.saveSkinLocally(username, bytes, "classic");
                         
-                        // 2. Faz upload pro catbox.moe
-                        String url = SkinManager.uploadToCatbox(username);
+                        // 2. Faz upload
+                        String url = SkinManager.uploadSkin(username);
                         
                         // 3. Mostra a URL pro jogador
-                        SwingUtilities.invokeLater(() ->
-                            JOptionPane.showMessageDialog(frame,
-                                "Skin enviada! Use no servidor:\n/skin url " + url,
-                                "Skin pronta", JOptionPane.INFORMATION_MESSAGE)
-                        );
+                        SwingUtilities.invokeLater(() -> {
+                            JTextField textField = new JTextField("/skin set web classic " + url);
+                            textField.setEditable(false);
+                            textField.setBorder(null);
+                            textField.setOpaque(false);
+                            Object[] message = {
+                                "Skin enviada! Copie e use o comando no servidor:",
+                                textField
+                            };
+                            JOptionPane.showMessageDialog(frame, message, "Skin pronta", JOptionPane.INFORMATION_MESSAGE);
+                        });
                     } catch (Exception ex) {
                         SwingUtilities.invokeLater(() ->
                             JOptionPane.showMessageDialog(frame,

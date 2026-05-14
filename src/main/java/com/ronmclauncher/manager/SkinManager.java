@@ -14,8 +14,8 @@ import java.nio.file.*;
  */
 public class SkinManager {
 
-    // API do catbox.moe — upload anônimo, sem autenticação
-    private static final String CATBOX_API = "https://catbox.moe/user/api.php";
+    // API do envs.sh — upload anônimo, direto e sem bloqueios do Cloudflare
+    private static final String UPLOAD_API = "https://envs.sh";
 
     // Pasta local onde as skins ficam armazenadas
     private static final Path SKIN_DIR = Path.of(OSdetection.getDefaultGameDir(), "ron_launcher_skins");
@@ -64,7 +64,7 @@ public class SkinManager {
      * @param username Nome do jogador
      * @return URL pública permanente da skin (ex: https://files.catbox.moe/abc123.png)
      */
-    public static String uploadToCatbox(String username) throws Exception {
+    public static String uploadSkin(String username) throws Exception {
         Path skinFile = SKIN_DIR.resolve(username + ".png");
         if (!Files.exists(skinFile)) {
             throw new FileNotFoundException(
@@ -80,7 +80,7 @@ public class SkinManager {
         byte[] body = buildMultipartBody(boundary, skinBytes, username + ".png");
 
         // Faz a requisição POST
-        HttpURLConnection conn = (HttpURLConnection) URI.create(CATBOX_API).toURL().openConnection();
+        HttpURLConnection conn = (HttpURLConnection) URI.create(UPLOAD_API).toURL().openConnection();
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
         conn.setConnectTimeout(20_000);
@@ -162,35 +162,19 @@ public class SkinManager {
     // -------------------------------------------------------------------------
 
     /**
-     * Monta o corpo multipart/form-data para a API do catbox.moe.
+     * Monta o corpo multipart/form-data para a API de imagens.
      *
      * Campos enviados:
-     *   reqtype=fileupload  → tipo de operação exigido pela API
-     *   userhash=           → vazio = upload anônimo (sem conta)
-     *   fileToUpload        → o PNG da skin
+     *   file -> o PNG da skin
      */
     private static byte[] buildMultipartBody(String boundary, byte[] fileBytes, String fileName) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         String crlf = "\r\n";
         String dd   = "--";
 
-        // Campo: reqtype
+        // Campo: file (o PNG)
         out.write((dd + boundary + crlf).getBytes());
-        out.write(("Content-Disposition: form-data; name=\"reqtype\"" + crlf).getBytes());
-        out.write(crlf.getBytes());
-        out.write("fileupload".getBytes());
-        out.write(crlf.getBytes());
-
-        // Campo: userhash (vazio = anônimo)
-        out.write((dd + boundary + crlf).getBytes());
-        out.write(("Content-Disposition: form-data; name=\"userhash\"" + crlf).getBytes());
-        out.write(crlf.getBytes());
-        out.write("".getBytes());
-        out.write(crlf.getBytes());
-
-        // Campo: fileToUpload (o PNG)
-        out.write((dd + boundary + crlf).getBytes());
-        out.write(("Content-Disposition: form-data; name=\"fileToUpload\"; filename=\"" + fileName + "\"" + crlf).getBytes());
+        out.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"" + crlf).getBytes());
         out.write(("Content-Type: image/png" + crlf).getBytes());
         out.write(crlf.getBytes());
         out.write(fileBytes);
