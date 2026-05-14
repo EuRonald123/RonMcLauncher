@@ -4,6 +4,7 @@ import com.google.gson.*;
 import com.ronmclauncher.classpath.GameRunner;
 import com.ronmclauncher.manager.DownloadManager;
 import com.ronmclauncher.manager.ProfileManager;
+import com.ronmclauncher.manager.SkinManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -112,8 +113,22 @@ public class MinecraftLauncher {
             }
         });
 
+        JButton btnSkin = new JButton("SKIN");
+        btnSkin.setFont(new Font("SansSerif", Font.BOLD, 14));
+        btnSkin.setBackground(new Color(67, 120, 157));
+        btnSkin.setForeground(Color.WHITE);
+        btnSkin.setFocusPainted(false);
+        btnSkin.setBorderPainted(false);
+        btnSkin.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnSkin.setPreferredSize(new Dimension(80, 38));
+
+        JPanel buttonsPanel = new JPanel(new BorderLayout(8, 0));
+        buttonsPanel.setBackground(bgDark);
+        buttonsPanel.add(btnSkin, BorderLayout.WEST);
+        buttonsPanel.add(btnPlay, BorderLayout.CENTER);
+
         bottomPanel.add(progressBar, BorderLayout.NORTH);
-        bottomPanel.add(btnPlay, BorderLayout.CENTER);
+        bottomPanel.add(buttonsPanel, BorderLayout.CENTER);
 
         frame.add(centerPanel, BorderLayout.CENTER);
         frame.add(bottomPanel, BorderLayout.SOUTH);
@@ -209,6 +224,43 @@ public class MinecraftLauncher {
                     });
                 }
             }).start();
+        });
+
+        btnSkin.addActionListener(e -> {
+            String username = txtUsername.getText().trim();
+            if (username.isEmpty() || username.length() < 3 || username.length() > 16) {
+                JOptionPane.showMessageDialog(frame, "Preencha um nome de usuário válido primeiro!", "Erro", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            JFileChooser fc = new JFileChooser();
+            fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG", "png"));
+
+            if (fc.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
+                new Thread(() -> {
+                    try {
+                        byte[] bytes = Files.readAllBytes(fc.getSelectedFile().toPath());
+                        
+                        // 1. Salva localmente
+                        SkinManager.saveSkinLocally(username, bytes, "classic");
+                        
+                        // 2. Faz upload pro catbox.moe
+                        String url = SkinManager.uploadToCatbox(username);
+                        
+                        // 3. Mostra a URL pro jogador
+                        SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(frame,
+                                "Skin enviada! Use no servidor:\n/skin url " + url,
+                                "Skin pronta", JOptionPane.INFORMATION_MESSAGE)
+                        );
+                    } catch (Exception ex) {
+                        SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(frame,
+                                "Erro ao processar skin: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE)
+                        );
+                    }
+                }).start();
+            }
         });
 
         frame.setVisible(true);
