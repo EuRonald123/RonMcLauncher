@@ -31,7 +31,7 @@ public class DownloadManager {
         }
     }
 
-    // Baixa um arquivo para o disco — pula se já existir (e segue redirects)
+    // Baixa um arquivo para o disco — pula se já existir
     public static void downloadFile(String url, Path dest) throws Exception {
         if (Files.exists(dest) && Files.size(dest) > 0){
             return;

@@ -21,7 +21,7 @@ public class JavaManager {
         String os = OSdetection.currentOs();
         String binName = os.equals("windows") ? "java.exe" : "java";
         
-        // Verifica se já baixamos no passado
+        // Verifica se ja foi baixado
         Path javaBin = findJavaBin(runtimesDir, binName);
         if (javaBin != null) {
             return javaBin.toString();
@@ -57,7 +57,6 @@ public class JavaManager {
         String arch = System.getProperty("os.arch").contains("aarch64") ? "aarch64" : "x64";
         String adoptOs = os.equals("osx") ? "mac" : os;
         
-        // Tentamos baixar versão GA (Estável), se não existir tenta EA (Early Access - p/ javas do futuro como o 25)
         String baseUrl = "https://api.adoptium.net/v3/binary/latest/" + version + "/%s/" + adoptOs + "/" + arch + "/jdk/hotspot/normal/eclipse";
         
         String downloadUrl = String.format(baseUrl, "ga");
@@ -72,7 +71,7 @@ public class JavaManager {
         DownloadManager.downloadFile(downloadUrl, archive);
 
         System.out.println("[JAVA] Extraindo executáveis...");
-        // O comando 'tar' já vem nativo no Linux, Mac e inclusive em Windows 10 pra extrair zip/targz
+
         ProcessBuilder pb = os.equals("windows") 
             ? new ProcessBuilder("tar", "-xf", archive.getFileName().toString())
             : new ProcessBuilder("tar", "-xzf", archive.getFileName().toString());
